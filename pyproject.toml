@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencraft-foundation"
+version = "0.16.0.dev1"
+description = "World-first foundation for an AI-operated, Blender-grade shared world"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "OpenCraft contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["jsonschema>=4.23,<5", "build>=1.2,<2"]
+
+[project.scripts]
+opencraft-quality = "opencraft_core.cli:quality_main"
+opencraft-mcp = "opencraft_core.cli:mcp_main"
+
+[project.urls]
+Homepage = "https://github.com/dj-thank/Opencraft"
+Repository = "https://github.com/dj-thank/Opencraft"
+Issues = "https://github.com/dj-thank/Opencraft/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["opencraft*"]
+
+[tool.setuptools.package-data]
+opencraft_core = ["py.typed"]
