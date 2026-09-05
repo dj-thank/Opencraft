@@ -1,0 +1,17 @@
+{
+  "$schemaFile": "capability-grant.schema.json",
+  "schemaVersion": "1.0",
+  "grantId": "grant-harbor-build-001",
+  "principalId": "user-rimo",
+  "agentId": "agent-personal-001",
+  "worldId": "world-aojima",
+  "capability": "world.build.preview",
+  "regionIds": ["harbor-hill"],
+  "radiusMeters": 80,
+  "taskId": "task-lighthouse-001",
+  "maxOperations": 100,
+  "maxCostUnits": 1000,
+  "maxUses": 20,
+  "expiresAt": "2026-09-06T12:00:00Z",
+  "issuedBy": "user-rimo"
+}
