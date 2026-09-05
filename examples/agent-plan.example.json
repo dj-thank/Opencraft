@@ -1,0 +1,35 @@
+{
+  "$schemaFile": "agent-plan.schema.json",
+  "schemaVersion": "1.0",
+  "planId": "plan-lighthouse-001",
+  "worldId": "world-aojima",
+  "baseRevision": 42,
+  "title": "港の丘に小さな灯台を建てる",
+  "assumptions": [
+    "既存の石畳と海への視線を残す",
+    "他の利用者が所有するオブジェクトは変更しない"
+  ],
+  "costUnits": 80,
+  "operations": [
+    {
+      "kind": "entity.create",
+      "regionId": "harbor-hill",
+      "entityId": "lighthouse-preview-001",
+      "payload": {
+        "name": "港の灯台",
+        "type": "building.lighthouse",
+        "position": [18, 6, 24],
+        "scale": [4, 14, 4]
+      }
+    },
+    {
+      "kind": "semantic.link",
+      "regionId": "harbor-hill",
+      "payload": {
+        "subject": "lighthouse-preview-001",
+        "relation": "connected_to",
+        "object": "harbor-path"
+      }
+    }
+  ]
+}
