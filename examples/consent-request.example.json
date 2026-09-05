@@ -1,0 +1,23 @@
+{
+  "$schemaFile": "consent-request.schema.json",
+  "schemaVersion": "1.0",
+  "requestId": "consent-task-lighthouse-001",
+  "actorId": "user-rimo",
+  "agentId": "agent-personal-001",
+  "worldId": "world-aojima",
+  "capability": "world.build.commit",
+  "previewHash": "a6b1b47a3af0fa25054b251dbdad74eda50b3baaecbb60dce970a2dd1ad75b5d",
+  "worldRevision": 42,
+  "expiresAt": "2026-09-06T11:32:00Z",
+  "summary": {
+    "title": "港の丘に小さな灯台を建てる",
+    "operationCount": 2,
+    "createCount": 1,
+    "updateCount": 0,
+    "deleteCount": 0,
+    "costUnits": 80,
+    "risk": "low",
+    "affectedRegionIds": ["harbor-hill"],
+    "assumptions": ["既存の石畳と海への視線を残す"]
+  }
+}
