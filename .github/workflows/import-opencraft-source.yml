@@ -1,0 +1,140 @@
+name: Import OpenCraft source snapshot
+
+on:
+  push:
+    branches:
+      - feat/import-opencraft-foundation
+    paths:
+      - .github/workflows/import-opencraft-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-opencraft-foundation
+  cancel-in-progress: false
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out import branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/import-opencraft-foundation
+          fetch-depth: 0
+
+      - name: Download immutable import payload
+        env:
+          IMPORT_BASE: https://filebin.net/opencraft-import-20260905-djthank-v015-7f4a9c
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 4 --retry-all-errors \
+            "$IMPORT_BASE/BlendWorld-v0.15-source.zip" \
+            --output /tmp/opencraft-source.zip
+          curl --fail --location --retry 4 --retry-all-errors \
+            "$IMPORT_BASE/BlendWorld-v0.15-source.zip.sha256" \
+            --output /tmp/opencraft-source.zip.sha256
+          expected="$(awk '{print $1}' /tmp/opencraft-source.zip.sha256)"
+          actual="$(sha256sum /tmp/opencraft-source.zip | awk '{print $1}')"
+          test -n "$expected"
+          test "$expected" = "$actual"
+          echo "Verified source archive: $actual"
+
+      - name: Validate archive paths and extract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import stat
+          import zipfile
+
+          archive = Path('/tmp/opencraft-source.zip')
+          target = Path('/tmp/opencraft-source')
+          target.mkdir(parents=True, exist_ok=True)
+
+          with zipfile.ZipFile(archive) as zf:
+              infos = zf.infolist()
+              if len(infos) > 5000:
+                  raise SystemExit('archive contains too many entries')
+              total = 0
+              for info in infos:
+                  path = PurePosixPath(info.filename)
+                  if path.is_absolute() or '..' in path.parts:
+                      raise SystemExit(f'unsafe archive path: {info.filename}')
+                  mode = (info.external_attr >> 16) & 0o170000
+                  if mode == stat.S_IFLNK:
+                      raise SystemExit(f'symlink is not accepted: {info.filename}')
+                  total += info.file_size
+                  if total > 100 * 1024 * 1024:
+                      raise SystemExit('expanded archive exceeds 100 MiB')
+              zf.extractall(target)
+          PY
+
+      - name: Replace branch content with reviewed source tree
+        run: |
+          set -euo pipefail
+          shopt -s dotglob nullglob
+          entries=(/tmp/opencraft-source/*)
+          if [ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ]; then
+            source_root="${entries[0]}"
+          else
+            source_root=/tmp/opencraft-source
+          fi
+
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$source_root"/. ./
+
+          # Never import local caches or generated private state.
+          find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache -o -name node_modules -o -name .venv \) -prune -exec rm -rf {} +
+          find . -type f \( -name '*.pyc' -o -name '*.pyo' -o -name '.DS_Store' \) -delete
+
+      - name: Run import safety checks
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f ARCHITECTURE.md
+          test -f prototype/index.html
+          test -f prototype/app.js
+          test -f mcp/tools.catalog.json
+          test -f webmcp/tool-catalog.json
+          test -f blender_extension/__init__.py
+          test -f cloudflare/src/worker.js
+          test -f scripts/run_quality_gate.py
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          patterns = {
+              'private key': re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+              'GitHub token': re.compile(rb'gh[pousr]_[A-Za-z0-9]{30,}'),
+              'OpenAI key': re.compile(rb'sk-(?:proj-)?[A-Za-z0-9_-]{20,}'),
+              'AWS access key': re.compile(rb'AKIA[0-9A-Z]{16}'),
+          }
+          findings = []
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or '.git' in path.parts:
+                  continue
+              data = path.read_bytes()
+              for label, pattern in patterns.items():
+                  if pattern.search(data):
+                      findings.append(f'{path}: {label}')
+          if findings:
+              raise SystemExit('secret-like material detected:\n' + '\n'.join(findings))
+          PY
+
+      - name: Commit imported foundation
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "Source tree is already imported."
+            exit 0
+          fi
+          git commit -m "feat: import OpenCraft world, agent, WebMCP and Blender foundation"
+          git push origin HEAD:feat/import-opencraft-foundation
