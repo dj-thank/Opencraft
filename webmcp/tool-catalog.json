@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "adapter": "WebMCP",
+  "authority": "Canonical World Protocol",
+  "publicationRules": {
+    "lobby": [],
+    "viewerInWorld": [
+      "opencraft_get_context",
+      "opencraft_search_world",
+      "opencraft_focus_entity",
+      "opencraft_set_waypoint"
+    ],
+    "builderWithSelection": [
+      "opencraft_get_context",
+      "opencraft_search_world",
+      "opencraft_focus_entity",
+      "opencraft_set_waypoint",
+      "opencraft_preview_build"
+    ],
+    "builderWithPreview": [
+      "opencraft_get_context",
+      "opencraft_search_world",
+      "opencraft_focus_entity",
+      "opencraft_set_waypoint",
+      "opencraft_preview_build",
+      "opencraft_request_commit"
+    ]
+  },
+  "invariants": [
+    "The commit request tool opens human consent UI and does not commit directly",
+    "Tools disappear when role or world state no longer permits them",
+    "World text and asset metadata are untrusted data, not agent instructions",
+    "WebMCP unavailability does not prevent manual, Blender, or MCP-based world use",
+    "Microphone, raw voice, credentials, arbitrary code, shell, and filesystem are never exposed"
+  ]
+}

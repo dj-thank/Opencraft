@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencraft.example/schemas/capability-grant.schema.json",
+  "title": "OpenCraft Capability Grant",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "grantId", "principalId", "worldId", "capability", "expiresAt", "maxUses"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "grantId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "principalId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "agentId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "worldId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "capability": {
+      "enum": [
+        "world.read.nearby",
+        "world.read.owned",
+        "world.search",
+        "world.build.preview",
+        "world.build.commit",
+        "world.history.undo",
+        "world.chat.private-agent",
+        "world.chat.public",
+        "world.voice.owner-listen",
+        "world.voice.public-agent",
+        "world.avatar.autonomous-move",
+        "world.memory.project.write"
+      ]
+    },
+    "regionIds": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+    },
+    "entityIds": {
+      "type": "array",
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+    },
+    "radiusMeters": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+    "taskId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "maxOperations": { "type": "integer", "minimum": 0, "maximum": 10000 },
+    "maxCostUnits": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "maxUses": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "issuedBy": { "type": "string", "minLength": 1, "maxLength": 200 }
+  }
+}

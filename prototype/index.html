@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#08131d">
+  <title>OpenCraft — World-first prototype</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip" href="#primary-action">操作へ移動</a>
+  <main id="app" data-mode="lobby" data-overlay="none">
+    <canvas id="world-canvas" aria-label="OpenCraftのワールド。ワールド内ではWASDで移動し、クリックで施工場所を選びます" tabindex="0"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <section id="lobby" class="lobby" aria-labelledby="lobby-title">
+      <div class="brand"><span class="mark" aria-hidden="true">◇</span> OpenCraft <span class="preview-label">Developer Preview</span></div>
+      <div class="lobby-card glass">
+        <p class="eyebrow">最近のワールド</p>
+        <h1 id="lobby-title">碧島</h1>
+        <p>港、丘、森がある小さな共同制作ワールド</p>
+        <div class="world-facts" aria-label="ワールド情報">
+          <span>6人が参加中</span><span>Builder</span><span>保存済み</span>
+        </div>
+        <button id="primary-action" class="primary">ワールドへ入る <kbd>Enter</kbd></button>
+        <div class="lobby-links">
+          <button data-open="avatar">姿を変える</button>
+          <button data-open="invite">招待</button>
+          <button data-open="settings">設定</button>
+        </div>
+      </div>
+      <div class="privacy-strip" aria-label="入室前のプライバシー状態">
+        <span>MIC <strong>OFF</strong></span>
+        <span>AGENT <strong>OFF</strong></span>
+        <span>REC <strong>OFF</strong></span>
+      </div>
+    </section>
+
+    <header id="hud" class="hud" hidden>
+      <div class="location glass"><strong>碧島</strong><span id="region-label">港の丘</span><small id="coordinate-label">X 0 · Z 0</small></div>
+      <div class="privacy glass" aria-label="現在のプライバシー状態">
+        <button id="mic-indicator" aria-pressed="false">MIC OFF</button>
+        <button id="agent-indicator" aria-pressed="false">AGENT OFF</button>
+        <span>REC OFF</span>
+      </div>
+      <div class="presence glass"><span class="faces" aria-hidden="true">● ● ●</span><strong>3人が近くにいます</strong><span>空間ボイス</span></div>
+    </header>
+
+    <div id="crosshair" class="crosshair" hidden aria-hidden="true"><span></span></div>
+    <div id="target-card" class="target-card glass" hidden><strong id="target-name">地面</strong><span id="target-coordinate">X 12 · Z 8</span></div>
+
+    <nav id="hotbar" class="hotbar glass" aria-label="ワールドの道具" hidden>
+      <button data-tool="look" class="active"><kbd>1</kbd><span>見る</span></button>
+      <button data-open="build"><kbd>2</kbd><span>つくる</span></button>
+      <button data-open="agent"><kbd>3</kbd><span>Agent</span></button>
+      <button data-open="social"><kbd>4</kbd><span>人</span></button>
+      <button data-open="voice"><kbd>5</kbd><span>声</span></button>
+      <button data-open="map"><kbd>6</kbd><span>地図</span></button>
+      <button id="undo-button" disabled><kbd>7</kbd><span>戻す</span></button>
+    </nav>
+
+    <section id="overlay" class="overlay" hidden aria-live="polite">
+      <div class="sheet glass" role="dialog" aria-modal="false" aria-labelledby="overlay-title">
+        <div class="sheet-heading">
+          <div><p class="eyebrow" id="overlay-kicker">OpenCraft</p><h2 id="overlay-title">道具</h2></div>
+          <button id="close-overlay" class="icon-button" aria-label="閉じる">×</button>
+        </div>
+        <div id="overlay-body"></div>
+      </div>
+    </section>
+
+    <form id="chat" class="chat glass" hidden>
+      <select id="chat-target" aria-label="送信先"><option>近く</option><option>全体</option><option>Party</option><option>Agent</option></select>
+      <input id="chat-input" maxlength="500" autocomplete="off" placeholder="メッセージ、または @Agent への依頼">
+      <button class="primary" type="submit">送る</button>
+    </form>
+
+    <div id="toast" class="toast glass" role="status" aria-live="polite" hidden></div>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

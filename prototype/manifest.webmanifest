@@ -1,0 +1,13 @@
+{
+  "name": "OpenCraft Developer Preview",
+  "short_name": "OpenCraft",
+  "description": "World-first UX prototype for an AI-operated, Blender-grade shared world",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07111a",
+  "theme_color": "#08131d",
+  "orientation": "any",
+  "categories": ["games", "productivity", "entertainment"],
+  "icons": []
+}

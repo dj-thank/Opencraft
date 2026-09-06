@@ -1,0 +1,29 @@
+schema_version = "1.0.0"
+
+id = "opencraft_world_bridge"
+version = "0.16.0"
+name = "OpenCraft World Bridge"
+tagline = "Connect Blender to an OpenCraft shared world"
+maintainer = "OpenCraft contributors"
+type = "add-on"
+
+website = "https://github.com/dj-thank/Opencraft"
+tags = ["3D View", "Development"]
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+[permissions]
+network = "Connect to the local OpenCraft sidecar for world synchronization"
+files = "Read and write validated local spool and cache files"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/*.zip",
+  "/*.blend1",
+  "/*.blend2",
+]

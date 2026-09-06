@@ -1,0 +1,12 @@
+OpenCraft
+Copyright 2026 OpenCraft contributors
+
+The OpenCraft core source is licensed under the Apache License, Version 2.0.
+
+The Blender extension under blender_extension/ is licensed separately under
+GPL-3.0-or-later, as required for Blender add-ons distributed through the
+Blender Extensions ecosystem. See blender_extension/LICENSE.txt.
+
+No Blender binary, third-party model, avatar asset, codec, voice SDK, proprietary
+model weight, or third-party cloud service is included by this repository unless
+explicitly identified in a future third-party notices file.

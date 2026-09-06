@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencraft.example/schemas/consent-request.schema.json",
+  "title": "OpenCraft Consent Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requestId", "actorId", "agentId", "worldId", "capability", "previewHash", "worldRevision", "expiresAt", "summary"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "requestId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "actorId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "agentId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "worldId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "capability": { "const": "world.build.commit" },
+    "previewHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "worldRevision": { "type": "integer", "minimum": 0 },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "operationCount", "createCount", "updateCount", "deleteCount", "costUnits", "risk"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "operationCount": { "type": "integer", "minimum": 1 },
+        "createCount": { "type": "integer", "minimum": 0 },
+        "updateCount": { "type": "integer", "minimum": 0 },
+        "deleteCount": { "type": "integer", "minimum": 0 },
+        "costUnits": { "type": "integer", "minimum": 0 },
+        "risk": { "enum": ["low", "medium", "high", "critical"] },
+        "affectedRegionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 500 }
+        }
+      }
+    }
+  }
+}

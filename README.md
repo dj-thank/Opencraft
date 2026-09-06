@@ -1,171 +1,91 @@
 # OpenCraft
 
-**AIが操作する「Minecraft概念のBlender」**を目指す、オープンな共有3Dワールド基盤です。
+**0.16.0-dev.1 — Developer Preview / Architecture Foundation**
 
-人はアバターで永続ワールドへ入り、歩き、話し、場所を指し、AI施工クルーへ依頼します。AIはBlender級の表現力で施工案を作りますが、世界を変更する前にゴーストプレビュー、影響範囲、費用、必要権限を提示し、人間の一回限りの承認を受けます。
+AIと対話しながら共有ワールドを制作するための基盤です。**一般配布版ではありません。**
+Canonical World が正本で、MCP・HTTP・Blender・ブラウザーはその境界を守るアダプターです。
 
-> **ワールドが本体。Blenderは制作エンジン。AIは施工クルー。人間は意図・承認・公開を担う。**
+## Codexだけ、またはClaude Codeだけで使う
 
-[English overview](#english-overview) · [日本語の詳細](README_JA.md) · [Architecture](ARCHITECTURE.md) · [Documentation index](docs/README.md)
+使うクライアントを一つ選んでください。両方のインストールは不要です。
+LLMと会話画面は普段使っているクライアントのままです。OpenCraftが別のLLMへ転送したり、
+OpenAI / AnthropicのAPIキーを要求したりすることはありません。
+選んだクライアント自体のインストール・ログインとPython 3.11以上が必要です。
 
-## 現在の状態
+Codexを使う場合、リポジトリのルートで実行します。
 
-`0.15.0-dev.1` は **Developer Preview / Architecture Foundation** です。
+```sh
+python scripts/setup_client.py codex
+```
 
-| 領域 | 現在の状態 |
+Claude Codeを使う場合は、代わりにこちらを実行します。
+
+```sh
+python scripts/setup_client.py claude
+```
+
+このスクリプトは `.venv` の作成、`.[mcp]` のインストール、非公開ローカルワールドの初期化、
+選んだクライアントへのMCP登録を行います。既存のクライアント設定は削除しません。
+`--dry-run` なら登録コマンドの表示だけです。Windowsでは `py -3` も使用できます。
+登録後、そのクライアントでMCPを再接続して、例えば次のように対話します。
+
+> OpenCraftの現在のワールドと履歴を確認して。港のharbor領域に灯台のエンティティを作る案を出して。
+> 既存のものは残して、変更内容をプレビューしてから承認を求めて。
+
+AIは現在の状態を読む → 宣言的な変更案を作る → プレビュー → クライアントの承認フォーム →
+一括反映、の順で進めます。「その灯台を少し移動」「直前の施工を取り消して」と続けられます。
+**自然言語の解釈は選んだLLMの役割であり、OpenCraft自身に別のチャットモデルは内蔵しません。**
+
+[詳しい設定・診断・制約](docs/NATIVE_CLIENTS.md)を参照してください。
+
+## 現在、実装されていること
+
+| 領域 | 実装状態 |
 |---|---|
-| ロビーとワールドだけのWorld-first UX | 自己完結ブラウザプロトタイプ実装済み |
-| ローカルCanonical World Server | SQLite、HTTP/WebSocket、招待、Session、差分Event、Preview、単回Consent、Atomic Commit、Undoを実装・テスト済み |
-| Browser World Client | Bearer認証、一回限りWS Ticket、Resume、Presence、Chunk購読を含む参照Adapter実装済み。UXへの自動接続は未完了 |
-| Agent / MCP / WebMCP | 安全境界、参照Gateway、動的Tool Adapter、Schema、テストあり |
-| Blender | Extensionと独立Sidecarの参照実装・決定論的ZIPあり。Blender実機・複数台E2Eは未実施 |
-| Cloudflare | Durable Objects / SQLite / Hibernationの部分実装。ローカル版との完全パリティと実環境E2Eは未完了 |
-| アバター、Voice、空間音響 | UX、ポリシー、Schema、参照モデルあり。実WebRTC / SFU / TURN / Native音響は未接続 |
-| 実LLM Provider | 未接続 |
-| 署名済みEXE / notarized DMG | 未作成 |
+| ネイティブMCP | stdio通信、6ツール、読み取り専用モード、クライアントをまたがない承認、2つのクライアント設定プロファイル |
+| 永続ワールド | SQLite、エンティティ作成・更新・削除、リビジョン、操作履歴、再起動後の復元 |
+| 安全な変更 | プレビューに結び付いた単回承認、承認後の再検証、冪等な再試行、保守的なUndo、トランザクション |
+| ローカルHTTP | 招待・承認・セッション取消、ワールド状態・イベント取得、同じ永続サービスへのアクセス |
+| 基盤・参照実装 | 権限、コンテキスト秘匿化、WebMCP公開ポリシー、Voice状態ポリシー、Blender宣言的Sidecar |
 
-**一般配布版ではありません。** `product/RELEASE_GATE_JA.md` と、品質ゲートが生成する `dist/release-readiness.json` を配布判定の正本にします。
+データは既定で `.opencraft-data` に保持します。同じディレクトリを指定すれば、CodexとClaudeで
+ワールド状態・施工履歴を共有できます。会話履歴や各クライアントのメモリーを相互転送するものではありません。
+両クライアントは同じOSユーザーの権限で動きます。互いに隔離する場合は別ディレクトリを使用してください。
 
-## 90秒で画面を試す
+## まだ実装・実証していないこと
 
-Python 3.11以上を用意します。
+`prototype/` はオフラインUXプロトタイプです。MCPで作ったエンティティが自動的にその画面や
+Blenderへ描画される実装ではありません。灯台の例も、まずはワールドの構造化データの作成です。
 
-```bash
-python scripts/build_standalone.py
-```
+本物のCodex / ClaudeにログインしてLLMを含めた操作を完走する検証、複数ブラウザー／Blenderの
+ライブ同期、WebSocket、Cloudflareデプロイ、WebRTC音声、任意アセットの隔離処理、署名済みアプリ配布、
+本番用アカウント復旧は未実証です。`terrain.patch` / `semantic.link` は永続サービスでは拒否します。
+実装のない処理を成功として返しません。Closed Alpha / General Releaseの許可は引き続きfalseです。
 
-生成された `dist/OpenCraft-World-First-v0.15.html` をブラウザで開きます。
+## 開発と検証
 
-ローカルWebサーバーでPWA版を見る場合:
-
-```bash
-python -m http.server 8080 -d prototype
-```
-
-- `Enter`: ワールドへ入る
-- `WASD`: 移動
-- ドラッグ: 視点変更
-- `T`: 人間 / Party / Agent共通チャット
-- `B`: AI Creative Mode
-- `3` または `Alt+A`: Personal Agent
-- `Esc`: ワールド上のPause Overlay
-
-この画面体験版は外部通信せず、実際のWebRTC、MCP、Cloudflare、Blender、LLMは呼び出しません。
-
-## ローカル共有サーバーを試す
-
-依存のない参照サーバーは、ソースツリーから直接起動できます。
-
-```bash
-# macOS / Linux
-./scripts/start-local.sh
-
-# Windows
-scripts\start-local.cmd
-```
-
-または開発環境を入れて起動します。
-
-```bash
+```sh
 python -m venv .venv
-# Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
-pip install -e ".[dev]"
-opencraft-server serve --host 127.0.0.1 --port 8787 --data-dir .opencraft-data
-```
-
-`http://127.0.0.1:8787/` でプロトタイプを配信します。API契約は [`contracts/server/openapi.json`](contracts/server/openapi.json)、ブラウザ参照実装は [`integration/world-client-adapter.js`](integration/world-client-adapter.js) にあります。
-
-ローカルサーバーは次の境界を実装しています。
-
-```text
-Invite / Session
-  → Read / Resume / Presence
-  → Plan / Preview
-  → Preview-bound one-time consent
-  → Idempotent atomic commit
-  → Provenance / Undo
-```
-
-既定で `127.0.0.1` のみに待ち受けます。公開Internetへそのまま露出しないでください。
-
-## 品質ゲート
-
-```bash
-pip install -e ".[dev]"
-python scripts/run_quality_gate.py
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python scripts/full_quality_gate.py
 python scripts/build_release.py
 ```
 
-個別実行:
+完全な品質ゲートにはNode.js 22とnpmも必要です。Python 3.11 / 3.13、MCP SDK 2.1.1で検証します。
+MCPテストは新旧プロトコル、stdio子プロセス、承認拒否、承認状態の改ざん、再起動、再試行を検証します。
+これは実クライアントのログインやLLMの理解精度を検証したという意味ではありません。
 
-```bash
-PYTHONPATH=src python -m unittest discover -s tests -v
-npm test
-npm run check
-```
+ソースZIPは品質ゲート通過後にのみ作成し、同じソースからの2回のビルドをCIで比較します。
+ローカル認証情報・データベース・私有ワールドをソース配布に含めません。
 
-品質ゲートが失敗した場合、Developer Previewの配布ZIPへ昇格しないFail-closed方式です。
+## 構成とライセンス
 
-## Agent / WebMCPの原則
+- `src/opencraft_server/`: MCP、HTTP、永続ワールド、ローカルワークスペース。
+- `src/opencraft_core/` / `src/opencraft_social/`: 正本ポリシーと独立した参照モデル。
+- `prototype/` / `webmcp/` / `blender_extension/`: UXと各種アダプターの基礎。
 
-```text
-Point / Select
-  → Intent
-  → Privacy-filtered observation
-  → Plan
-  → Ghost + Diff + Assumptions + Cost
-  → Preview-bound, one-time human consent
-  → Server-side revalidation
-  → Atomic commit
-  → Validation + Provenance + Undo
-```
-
-WebMCPはブラウザ上の可視ワールドをAgent向けToolへ変換するAdapterです。World Protocol、認証、Voice transport、Blender実行の正本にはしません。
-
-次は公開しません。
-
-- マイクを自動でONにするTool
-- 周囲の生音声、Private Chat、Credential、Invite Token
-- 任意JavaScript / Python / Shell / Filesystem操作
-- Previewと同意なしのWorld Commit
-
-詳しくは [`product/AGENT_WEBMCP_BLUEPRINT_JA.md`](product/AGENT_WEBMCP_BLUEPRINT_JA.md) を参照してください。
-
-## リポジトリ構成
-
-```text
-prototype/          World-first UX、Agent Overlay、WebMCP Adapter
-src/opencraft_world/ Avatar、Voice、音響、Agent、Policy、MCP参照実装
-src/opencraft_server/ SQLite-backed Canonical World Server
-integration/        Browser World ClientとNative handoff契約
-contracts/server/   OpenAPI、WebSocket、Plan、Capability、Parity契約
-blender_extension/  Blender Extensionと独立Sidecar
-cloudflare/         Durable Objects参照port（部分パリティ）
-launcher/           Desktop Launcher参照実装
-packaging/          署名・notarization・配布検証手順
-protocols/          Draft 2020-12 JSON Schema
-examples/           Schemaに対応する安全なExample
-mcp/ / webmcp/      Tool Catalogと境界説明
-product/            製品、UX、音響、Blender、運用、配布設計
-scripts/            Build、E2E、Fail-closed quality gate
-tests/              Python / JavaScript tests
-```
-
-## セキュリティ
-
-脆弱性は公開Issueではなく [`SECURITY.md`](SECURITY.md) の手順で報告してください。Developer Previewを重要データの唯一の保存先、公開MCP Gateway、公開World Server、実運用Voiceサービスとして使用しないでください。
-
-## ライセンス
-
-コアはApache License 2.0です。Blender ExtensionはBlenderとの統合境界に合わせ、`blender_extension/LICENSE.txt`に記載したGPL-3.0-or-laterで配布します。第三者SDK、Codec、音響ライブラリ、Avatar素材は同梱しておらず、採用時に個別のライセンスと配布条件を確認します。
-
----
-
-## English overview
-
-OpenCraft explores an **AI-operated, Minecraft-like persistent world backed by Blender-grade authoring**. Humans navigate, socialize, point at places, and approve changes. Agents inspect bounded context, produce visible previews, and may commit only through capability-scoped, revision-bound, preview-bound, one-time consent.
-
-This repository includes a local SQLite-backed canonical world server, a dependency-free world-first browser prototype, a reference HTTP/WebSocket client adapter, policy and acoustic reference models, JSON Schemas, a reference MCP gateway, a dynamic WebMCP adapter, and a Blender bridge/sidecar reference implementation.
-
-It does **not** yet provide a production Internet-hosted service, proven Cloudflare parity, live WebRTC voice, a real LLM provider, multi-client Blender synchronization, or signed desktop installers. See [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`product/RELEASE_GATE_JA.md`](product/RELEASE_GATE_JA.md).
+Core、サーバー、文書はApache-2.0。Blender ExtensionはGPL-3.0-or-laterの境界です。
+詳細は[LICENSE](LICENSE)、[NOTICE](NOTICE)、[Blenderのライセンス](blender_extension/LICENSE.txt)、
+[配布ゲート](product/RELEASE_GATE_JA.md)、[実装状態](docs/REPOSITORY_STATUS.md)を確認してください。

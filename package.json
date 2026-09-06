@@ -1,0 +1,15 @@
+{
+  "name": "opencraft-foundation",
+  "version": "0.16.0-dev.1",
+  "private": true,
+  "type": "module",
+  "description": "World-first browser shell and WebMCP reference adapter",
+  "scripts": {
+    "check": "node scripts/check-js.mjs",
+    "test": "node --test tests-js/*.test.mjs",
+    "quality": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

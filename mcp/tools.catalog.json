@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0",
+  "runtime": "opencraft_server.mcp",
+  "transport": "stdio",
+  "inputSchemaSource": "official SDK tools/list",
+  "tools": [
+    {
+      "name": "opencraft_get_context",
+      "mutatesWorld": false,
+      "requiresHumanConfirmation": false
+    },
+    {
+      "name": "opencraft_get_history",
+      "mutatesWorld": false,
+      "requiresHumanConfirmation": false
+    },
+    {
+      "name": "opencraft_preview_build",
+      "mutatesWorld": false,
+      "requiresHumanConfirmation": false
+    },
+    {
+      "name": "opencraft_get_preview",
+      "mutatesWorld": false,
+      "requiresHumanConfirmation": false
+    },
+    {
+      "name": "opencraft_request_commit",
+      "mutatesWorld": true,
+      "requiresHumanConfirmation": true
+    },
+    {
+      "name": "opencraft_undo_agent_transaction",
+      "mutatesWorld": true,
+      "requiresHumanConfirmation": true
+    }
+  ]
+}
