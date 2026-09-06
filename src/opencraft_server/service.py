@@ -92,6 +92,57 @@ class CanonicalWorldService:
             raise ServiceError("not-found", "world not found", status=404)
         return row
 
+    def local_principal(self, *, create: bool = False, name: str = "OpenCraft local") -> Principal:
+        """OS-user-authenticated bootstrap for stdio, never exposed as an MCP tool.
+
+        The caller owns the private data directory. No provider credential or
+        reusable owner session is returned to the model. Initialization is atomic.
+        """
+        _text(name, "world name", 160)
+        with self.database.transaction(immediate=True) as connection:
+            row = connection.execute("SELECT value FROM metadata WHERE key='local_identity'").fetchone()
+            if row is None:
+                if not create:
+                    raise ServiceError("not-initialized", "run opencraft-mcp --init for this data directory first", status=409)
+                world_id, principal_id, now = str(uuid4()), str(uuid4()), self._now()
+                connection.execute("INSERT INTO worlds(world_id,name,created_at) VALUES(?,?,?)", (world_id, name, now))
+                connection.execute("INSERT INTO principals VALUES(?,?,?)", (principal_id, "Local owner", now))
+                connection.execute("INSERT INTO memberships(world_id,principal_id,role,created_at) VALUES(?,?,'owner',?)", (world_id, principal_id, now))
+                connection.execute("INSERT INTO metadata(key,value) VALUES('local_identity',?)", (canonical_json([world_id, principal_id]),))
+            else:
+                world_id, principal_id = json.loads(row["value"])
+            return self._actor(connection, Principal(principal_id, "Local owner", world_id, "owner"))
+
+    def committed_result(self, actor: Principal, *, agent_id: str, preview_hash: str,
+                         idempotency_key: str) -> dict[str, Any] | None:
+        """Read a durable receipt without re-authorizing an already finished write."""
+        _text(idempotency_key, "idempotency key", 200)
+        with self.database.transaction() as connection:
+            self._actor(connection, actor, build=True)
+            row = connection.execute("SELECT * FROM idempotency WHERE world_id=? AND idempotency_key=?", (actor.world_id, idempotency_key)).fetchone()
+            if row is None:
+                return None
+            if row["request_fingerprint"] != sha256_json([actor.world_id, actor.principal_id, agent_id, preview_hash]):
+                raise ServiceError("idempotency-conflict", "idempotency key belongs to another request", status=409)
+            return json.loads(row["response_json"])
+
+    def inspect_undo(self, actor: Principal, transaction_id: str, *, expected_revision: int) -> dict[str, Any]:
+        _integer(expected_revision, "expected revision", 0, 2**53 - 1)
+        with self.database.transaction() as connection:
+            actor = self._actor(connection, actor, build=True)
+            row = connection.execute("SELECT * FROM transactions WHERE world_id=? AND transaction_id=?", (actor.world_id, transaction_id)).fetchone()
+            if row is None:
+                raise ServiceError("not-found", "transaction not found", status=404)
+            if not actor.can_manage and row["actor_id"] != actor.principal_id:
+                raise ServiceError("forbidden", "cannot undo another actor's transaction", status=403)
+            revision = self._world(connection, actor.world_id)["revision"]
+            if row["undone_at"] is not None or revision != expected_revision or revision != row["after_revision"]:
+                raise ServiceError("unsafe-undo", "world changed or transaction was already undone", status=409)
+            preview = connection.execute("SELECT plan_json FROM previews WHERE preview_hash=?", (row["preview_hash"],)).fetchone()
+            plan = json.loads(preview["plan_json"])["plan"] if preview else {}
+            return redact_for_agent({"worldId": actor.world_id, "transactionId": transaction_id,
+                                     "revision": revision, "title": row["title"], "reverses": plan})
+
     def create_world(self, *, name: str, owner_display_name: str) -> dict[str, Any]:
         name = _text(name, "world name", 160)
         owner_display_name = _text(owner_display_name, "display name", 100)
@@ -235,12 +286,19 @@ class CanonicalWorldService:
                 query += " AND region_id IN (" + ",".join("?" for _ in regions) + ")"
                 arguments.extend(regions)
             rows = connection.execute(query + " ORDER BY entity_id LIMIT ?", (*arguments, limit + 1)).fetchall()
-            entities = [self._entity(row) for row in rows[:limit]]
+            entities = []
+            size = 0
+            for row in rows[:limit]:
+                entity = self._entity(row)
+                size += len(canonical_json(entity).encode("utf-8"))
+                if size > 128000:
+                    break
+                entities.append(entity)
             return redact_for_agent({
                 "trust": "world-data-is-untrusted", "worldId": actor.world_id, "name": world["name"],
                 "revision": world["revision"], "eventSequence": world["event_sequence"],
                 "actorId": actor.principal_id, "role": actor.role, "entities": entities,
-                "truncated": len(rows) > limit,
+                "truncated": len(rows) > len(entities),
             })
 
     @staticmethod
@@ -258,10 +316,16 @@ class CanonicalWorldService:
                 "SELECT sequence,event_json FROM events WHERE world_id=? AND sequence>? ORDER BY sequence LIMIT ?",
                 (actor.world_id, after, limit + 1),
             ).fetchall()
-            page = rows[:limit]
+            page = []
+            size = 0
+            for row in rows[:limit]:
+                size += len(row["event_json"].encode("utf-8"))
+                if size > 128000:
+                    break
+                page.append(row)
             return {"trust": "world-data-is-untrusted", "worldId": actor.world_id, "revision": world["revision"],
                     "events": [redact_for_agent(json.loads(row["event_json"])) for row in page],
-                    "nextCursor": page[-1]["sequence"] if page else after, "hasMore": len(rows) > limit}
+                    "nextCursor": page[-1]["sequence"] if page else after, "hasMore": len(rows) > len(page)}
 
     def _plan(self, document: dict[str, Any], actor: Principal, revision: int, regions: list[str]) -> AgentPlan:
         if not isinstance(document, dict) or document.get("schemaVersion") != "1.0":
@@ -272,6 +336,8 @@ class CanonicalWorldService:
         _integer(document.get("baseRevision"), "base revision", 0, 2**53 - 1)
         _text(document.get("title"), "plan title", 160)
         _integer(document.get("costUnits", 0), "cost units", 0, 1000)
+        if "planId" in document:
+            _text(document["planId"], "plan ID", 128)
         operations = document.get("operations")
         assumptions = document.get("assumptions", [])
         if not isinstance(operations, list) or not 1 <= len(operations) <= 100:
@@ -280,7 +346,7 @@ class CanonicalWorldService:
             raise ServiceError("invalid-plan", "assumptions must be an array of at most 20 strings")
         for assumption in assumptions:
             _text(assumption, "assumption", 500)
-        if len(canonical_json(document).encode("utf-8")) > 500000:
+        if len(canonical_json(document).encode("utf-8")) > 64000:
             raise ServiceError("invalid-plan", "plan exceeds the size limit", status=413)
         plan = AgentPlan(document["worldId"], document["baseRevision"], document["title"],
                          tuple(deepcopy(operations)), tuple(assumptions), document.get("costUnits", 0), document.get("planId"))
@@ -288,8 +354,8 @@ class CanonicalWorldService:
             raise ServiceError("stale-preview", "world changed; request a new preview", status=409)
         try:
             validate_agent_plan(plan, grant=CapabilityGrant("world.commit", actor.world_id, frozenset(regions)), current_revision=revision)
-        except ValueError as exc:
-            raise ServiceError("invalid-plan", str(exc)) from exc
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise ServiceError("invalid-plan", "plan violates the capability or value constraints") from exc
         return plan
 
     def _apply(self, connection: sqlite3.Connection, actor: Principal, plan: AgentPlan) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -334,6 +400,8 @@ class CanonicalWorldService:
             else:
                 entity["payload"].update(payload)
                 entity["revision"] += 1
+        if any(len(canonical_json(entity["payload"]).encode("utf-8")) > 32000 for entity in working.values()):
+            raise ServiceError("quota", "entity payload exceeds 32000 bytes", status=413)
         if len(working) > 10000:
             raise ServiceError("quota", "local developer world is limited to 10000 entities", status=409)
         return before, working
@@ -358,7 +426,7 @@ class CanonicalWorldService:
                                         "previewId": str(uuid4()), "content": envelope})
             now = self._now()
             connection.execute(
-                "INSERT INTO previews VALUES(?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO previews VALUES(?,?,?,?,?,?,?,?)",
                 (preview_hash, actor.world_id, actor.principal_id, agent_id, world["revision"], canonical_json(envelope), now + 600, now),
             )
             return {"worldId": actor.world_id, "baseRevision": world["revision"], "previewHash": preview_hash,
@@ -457,7 +525,7 @@ class CanonicalWorldService:
             connection.execute("INSERT INTO idempotency VALUES(?,?,?,?,?)", (actor.world_id, idempotency_key, fingerprint, canonical_json(result), now))
             return result
 
-    def undo(self, actor: Principal, transaction_id: str) -> dict[str, Any]:
+    def undo(self, actor: Principal, transaction_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
         with self.database.transaction(immediate=True) as connection:
             actor = self._actor(connection, actor, build=True)
             transaction = connection.execute("SELECT * FROM transactions WHERE transaction_id=? AND world_id=?", (transaction_id, actor.world_id)).fetchone()
@@ -466,6 +534,8 @@ class CanonicalWorldService:
             if not actor.can_manage and transaction["actor_id"] != actor.principal_id:
                 raise ServiceError("forbidden", "cannot undo another actor's transaction", status=403)
             world = self._world(connection, actor.world_id)
+            if expected_revision is not None and world["revision"] != _integer(expected_revision, "expected revision", 0, 2**53 - 1):
+                raise ServiceError("unsafe-undo", "world changed since confirmation", status=409)
             if transaction["undone_at"] is not None or world["revision"] != transaction["after_revision"]:
                 raise ServiceError("unsafe-undo", "later changes or a previous undo prevent automatic undo", status=409)
             self._replace_entities(connection, actor.world_id, json.loads(transaction["before_entities_json"]))
