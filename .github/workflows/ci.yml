@@ -41,6 +41,22 @@ jobs:
           python -m pip install -e ".[dev]"
       - name: Run complete fail-closed quality gate
         run: python scripts/full_quality_gate.py
+      - name: Capture exact tracked source for diagnosis (not a release)
+        if: always() && matrix.python-version == '3.11'
+        run: |
+          mkdir -p dist
+          git archive --format=zip --output=dist/diagnostic-source.zip HEAD
+          git rev-parse HEAD > dist/diagnostic-source-commit.txt
+      - name: Upload unvalidated source diagnostics
+        if: always() && matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unvalidated-source-diagnostics
+          path: |
+            dist/diagnostic-source.zip
+            dist/diagnostic-source-commit.txt
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload diagnostic report
         if: always()
         uses: actions/upload-artifact@v4
