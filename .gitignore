@@ -30,3 +30,11 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local authority and SQLite sidecars must never enter source control.
+token-pepper.bin
+bootstrap-token.txt
+.pepper-*
+*-wal
+*-shm
+owner-session*

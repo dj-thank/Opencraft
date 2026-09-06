@@ -3,6 +3,8 @@ from __future__ import annotations
 from argparse import ArgumentParser
 from pathlib import Path
 import secrets
+import os
+from threading import Thread
 import signal
 import sys
 
@@ -43,6 +45,10 @@ def serve(args) -> int:
         print("WARNING: the reference server is not production-safe and provides no TLS", file=sys.stderr)
 
     data_dir = args.data_dir.expanduser().resolve()
+    data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != "nt" and data_dir.stat().st_mode & 0o077:
+        print("data directory must be private (mode 0700)", file=sys.stderr)
+        return 2
     database = Database(data_dir / "world.sqlite3")
     authority = TokenAuthority.from_data_directory(data_dir)
     service = CanonicalWorldService(database, authority)
@@ -57,15 +63,23 @@ def serve(args) -> int:
     )
 
     def stop(_signum, _frame):
-        server.shutdown()
+        Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGINT, stop)
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, stop)
 
     print(f"OpenCraft local reference server: http://{args.host}:{server.server_address[1]}")
-    print(f"Bootstrap token (local terminal only): {bootstrap_token}")
-    print("This token creates the initial local world. It is never written to the database or logs.")
+    bootstrap_path = data_dir / "bootstrap-token.txt"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    with os.fdopen(os.open(bootstrap_path, flags, 0o600), "w") as handle:
+        handle.write(bootstrap_token)
+    if os.name != "nt":
+        bootstrap_path.chmod(0o600)
+    print(f"Local bootstrap capability file: {bootstrap_path}")
+    print("Keep that file private. Never paste it into agent chat or commit it.")
     try:
         server.serve_forever(poll_interval=0.2)
     finally:

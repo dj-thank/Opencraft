@@ -1,70 +1,38 @@
 {
   "schemaVersion": "1.0",
-  "protocolVersion": "2026-07-28",
+  "runtime": "opencraft_server.mcp",
+  "transport": "stdio",
+  "inputSchemaSource": "official SDK tools/list",
   "tools": [
     {
       "name": "opencraft_get_context",
-      "title": "Read visible world context",
-      "capability": "world.read.nearby",
       "mutatesWorld": false,
-      "requiresHumanConsent": false
+      "requiresHumanConfirmation": false
     },
     {
-      "name": "opencraft_search_world",
-      "title": "Search visible world entities",
-      "capability": "world.search",
+      "name": "opencraft_get_history",
       "mutatesWorld": false,
-      "requiresHumanConsent": false
-    },
-    {
-      "name": "opencraft_set_waypoint",
-      "title": "Suggest a waypoint",
-      "capability": "world.read.nearby",
-      "mutatesWorld": false,
-      "movesAvatar": false,
-      "requiresHumanConsent": false
+      "requiresHumanConfirmation": false
     },
     {
       "name": "opencraft_preview_build",
-      "title": "Create a non-mutating build preview",
-      "capability": "world.build.preview",
       "mutatesWorld": false,
-      "requiresHumanConsent": false
+      "requiresHumanConfirmation": false
+    },
+    {
+      "name": "opencraft_get_preview",
+      "mutatesWorld": false,
+      "requiresHumanConfirmation": false
     },
     {
       "name": "opencraft_request_commit",
-      "title": "Request human consent for the exact preview",
-      "capability": "world.build.commit",
-      "mutatesWorld": false,
-      "opensConsentUI": true,
-      "requiresHumanConsent": true
+      "mutatesWorld": true,
+      "requiresHumanConfirmation": true
     },
     {
       "name": "opencraft_undo_agent_transaction",
-      "title": "Request a policy-checked transaction undo",
-      "capability": "world.history.undo",
       "mutatesWorld": true,
-      "requiresHumanConsent": true
-    },
-    {
-      "name": "opencraft_share_object_card",
-      "title": "Request sharing an object card",
-      "capability": "world.chat.public",
-      "mutatesWorld": false,
-      "publicAction": true,
-      "requiresHumanConsent": true
+      "requiresHumanConfirmation": true
     }
-  ],
-  "forbiddenSurfaces": [
-    "microphone.capture",
-    "voice.raw.read",
-    "credential.read",
-    "invite_token.read",
-    "session_token.read",
-    "javascript.eval",
-    "python.exec",
-    "shell.exec",
-    "filesystem.arbitrary",
-    "blender.script.exec"
   ]
 }

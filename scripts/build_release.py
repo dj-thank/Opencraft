@@ -12,8 +12,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-EXCLUDED_PARTS = {".git", ".venv", "node_modules", "dist", "build", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
-EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".sqlite", ".sqlite3", ".db", ".pem", ".key", ".dmg", ".exe", ".msi", ".app"}
+EXCLUDED_PARTS = {".git", ".venv", "node_modules", "dist", "build", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".opencraft-data", "venv"}
+EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".sqlite", ".sqlite3", ".db", ".pem", ".key", ".dmg", ".exe", ".msi", ".app", ".sqlite3-wal", ".sqlite3-shm", ".db-wal", ".db-shm"}
 
 
 def digest(path: Path) -> str:
@@ -24,19 +24,46 @@ def digest(path: Path) -> str:
     return value.hexdigest()
 
 
+SOURCE_DIRECTORIES = {".github", "src", "tests", "tests-js", "scripts", "docs", "product",
+                      "examples", "protocols", "prototype", "webmcp", "mcp", "blender_extension"}
+ROOT_FILES = {"README.md", "ARCHITECTURE.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md",
+              "DEVELOPMENT.md", "GOVERNANCE.md", "LICENSE", "NOTICE", "ROADMAP.md", "SECURITY.md",
+              "SUPPORT.md", "VERSION", "pyproject.toml", "package.json", "package-lock.json",
+              ".gitignore", "AGENTS.md", "CLAUDE.md"}
+PRIVATE_NAMES = {"token-pepper.bin", "bootstrap-token.txt", "credentials.json", "secrets.json",
+                 "id_rsa", "id_ed25519", ".DS_Store", "Thumbs.db"}
+
+
 def source_files() -> list[Path]:
+    """Allowlisted source roots only; never bundle local worlds or authentication.
+
+    Works in both a Git checkout and an extracted source archive. Adding a new
+    top-level source directory is an explicit, reviewable packaging decision.
+    """
     result: list[Path] = []
-    for path in ROOT.rglob("*"):
-        if not path.is_file():
-            continue
-        relative = path.relative_to(ROOT)
-        if EXCLUDED_PARTS.intersection(relative.parts):
-            continue
-        if path.suffix.lower() in EXCLUDED_SUFFIXES:
-            continue
-        if path.name in {".DS_Store", "Thumbs.db"}:
-            continue
-        result.append(path)
+    for parent, directories, names in os.walk(ROOT, followlinks=False):
+        directory = Path(parent)
+        for name in list(directories):
+            child = directory / name
+            allowed = name not in EXCLUDED_PARTS and not name.endswith(".egg-info")
+            if directory == ROOT:
+                allowed = allowed and name in SOURCE_DIRECTORIES
+            if allowed and child.is_symlink():
+                raise RuntimeError("refusing to package a symlinked source directory")
+            if not allowed:
+                directories.remove(name)
+        for name in names:
+            path = directory / name
+            if directory == ROOT and name not in ROOT_FILES:
+                continue
+            if name in PRIVATE_NAMES or name.startswith((".env", ".pepper-", "owner-session")):
+                continue
+            if path.suffix.lower() in EXCLUDED_SUFFIXES or name.endswith(("-wal", "-shm", "-journal")):
+                continue
+            if path.is_symlink():
+                raise RuntimeError("refusing to package a symlinked source file")
+            if path.is_file():
+                result.append(path)
     return sorted(result, key=lambda item: item.relative_to(ROOT).as_posix())
 
 

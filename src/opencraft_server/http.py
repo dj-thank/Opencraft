@@ -36,9 +36,9 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, format: str, *args: object) -> None:
-        # BaseHTTPRequestHandler logs the request path but never headers or body. Query
-        # parameters are not accepted for credentials; keep logs concise in development.
-        super().log_message(format, *args)
+        # Do not log paths, query strings, headers or request bodies. A caller
+        # can put a credential in any of them even when authentication rejects it.
+        super().log_message("OpenCraft HTTP request processed")
 
     def _security_headers(self, *, content_type: str) -> dict[str, str]:
         return {
@@ -52,7 +52,7 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
         }
 
     def _send(self, status: int, document: Any, *, content_type: str = "application/json; charset=utf-8") -> None:
-        if content_type.startswith("application/json"):
+        if content_type.split(";", 1)[0].endswith("json"):
             payload = json.dumps(document, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
         elif isinstance(document, bytes):
             payload = document
@@ -74,17 +74,25 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
         }, content_type="application/problem+json; charset=utf-8")
 
     def _read_json(self) -> dict[str, Any]:
+        if self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) != 1:
+            self.close_connection = True
+            raise ServiceError("invalid-framing", "one Content-Length and no Transfer-Encoding are required")
         raw_length = self.headers.get("Content-Length")
         try:
             length = int(raw_length or "0")
         except ValueError as exc:
+            self.close_connection = True
             raise ServiceError("invalid-content-length", "invalid Content-Length") from exc
         if length < 0 or length > MAX_BODY_BYTES:
+            self.close_connection = True
             raise ServiceError("body-too-large", "request body exceeds 1 MiB", status=413)
         if self.headers.get_content_type() != "application/json":
+            self.close_connection = True
             raise ServiceError("unsupported-media-type", "Content-Type must be application/json", status=415)
         try:
-            document = json.loads(self.rfile.read(length))
+            def reject_constant(_value):
+                raise ValueError("non-finite JSON is not allowed")
+            document = json.loads(self.rfile.read(length), parse_constant=reject_constant)
         except json.JSONDecodeError as exc:
             raise ServiceError("invalid-json", "request body is not valid JSON") from exc
         if not isinstance(document, dict):
@@ -162,9 +170,9 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
             self._send(201, service.create_invite(
                 actor,
                 role=str(body.get("role", "viewer")),
-                max_uses=int(body.get("maxUses", 1)),
-                ttl_seconds=int(body.get("ttlSeconds", 24 * 3600)),
-                approval_required=bool(body.get("approvalRequired", True)),
+                max_uses=body.get("maxUses", 1),
+                ttl_seconds=body.get("ttlSeconds", 24 * 3600),
+                approval_required=body.get("approvalRequired", True),
             ))
             return
 
@@ -176,7 +184,7 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
         if method == "POST" and path.startswith("/v1/join/") and path.endswith("/decision"):
             request_id = path.removeprefix("/v1/join/").removesuffix("/decision")
             body = self._read_json()
-            service.decide_join_request(actor, request_id, approve=bool(body.get("approve")))
+            service.decide_join_request(actor, request_id, approve=body.get("approve"))
             self._send(200, {"status": "approved" if body.get("approve") else "rejected"})
             return
 
@@ -202,7 +210,7 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
                 actor,
                 agent_id=str(body.get("agentId", "")),
                 preview_hash=str(body.get("previewHash", "")),
-                ttl_seconds=int(body.get("ttlSeconds", 120)),
+                ttl_seconds=body.get("ttlSeconds", 120),
             )
             self._send(201, {"consentToken": token})
             return
@@ -257,7 +265,7 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
             self._route(method)
         except ServiceError as exc:
             self._problem(exc.status, exc.code, str(exc))
-        except (ValueError, TypeError) as exc:
-            self._problem(400, "invalid-request", str(exc))
+        except (ValueError, TypeError):
+            self._problem(400, "invalid-request", "request violates input constraints")
         except Exception:
             self._problem(500, "internal-error", "the request could not be completed")

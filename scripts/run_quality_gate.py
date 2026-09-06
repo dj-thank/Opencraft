@@ -22,11 +22,14 @@ class Check:
     blocking: bool = True
 
 
-def run(name: str, command: list[str], *, optional_if_missing: str | None = None) -> Check:
-    if optional_if_missing and shutil.which(optional_if_missing) is None:
-        return Check(name, "blocked", 0.0, f"{optional_if_missing} is not installed", blocking=False)
+def run(name: str, command: list[str], *, required_program: str | None = None) -> Check:
+    if required_program and shutil.which(required_program) is None:
+        return Check(name, "blocked", 0.0, f"{required_program} is not installed", blocking=True)
     start = time.monotonic()
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+    try:
+        result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired):
+        return Check(name, "failed", round(time.monotonic() - start, 3), "required check could not complete")
     detail = (result.stdout + result.stderr).strip()[-12000:]
     return Check(name, "passed" if result.returncode == 0 else "failed", round(time.monotonic() - start, 3), detail)
 
@@ -40,8 +43,8 @@ def main() -> int:
     validator = ROOT / "scripts" / "validate_schemas.py"
     if validator.exists():
         checks.append(run("json-schema-examples", [sys.executable, str(validator)]))
-    checks.append(run("javascript-syntax", ["npm", "run", "check"], optional_if_missing="npm"))
-    checks.append(run("javascript-tests", ["npm", "test"], optional_if_missing="npm"))
+    checks.append(run("javascript-syntax", ["npm", "run", "check"], required_program="npm"))
+    checks.append(run("javascript-tests", ["npm", "test"], required_program="npm"))
 
     DIST.mkdir(exist_ok=True)
     report = {

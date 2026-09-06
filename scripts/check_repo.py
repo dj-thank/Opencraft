@@ -16,6 +16,15 @@ REQUIRED = (
     "pyproject.toml",
     "package.json",
     "src/opencraft_core/world.py",
+    "src/opencraft_server/service.py",
+    "src/opencraft_server/mcp.py",
+    "src/opencraft_server/workspace.py",
+    "tests/test_mcp_native.py",
+    "tests/test_server_safety.py",
+    "scripts/setup_client.py",
+    "docs/NATIVE_CLIENTS.md",
+    "AGENTS.md",
+    "CLAUDE.md",
     "src/opencraft_core/consent.py",
     "src/opencraft_core/webmcp.py",
     "src/opencraft_social/shell.py",
@@ -33,7 +42,7 @@ SECRET_PATTERNS = {
     "generic bearer": re.compile(rb"Authorization:\s*Bearer\s+[A-Za-z0-9._~-]{24,}", re.I),
 }
 
-IGNORED_PARTS = {".git", ".venv", "node_modules", "dist", "build", "__pycache__"}
+IGNORED_PARTS = {".git", ".venv", "node_modules", "dist", "build", "__pycache__", ".opencraft-data", "venv"}
 
 
 def files():
@@ -65,7 +74,7 @@ def main() -> int:
         if not permissions.get("network") or not permissions.get("files"):
             errors.append("Blender extension must explain network and files permissions")
 
-    forbidden_names = {".env", "id_rsa", "credentials.json", "secrets.json"}
+    forbidden_names = {".env", "id_rsa", "credentials.json", "secrets.json", "token-pepper.bin", "bootstrap-token.txt"}
     for path in files():
         relative = path.relative_to(ROOT)
         if path.name in forbidden_names:
@@ -94,8 +103,8 @@ def main() -> int:
 
     if errors:
         print("Repository invariant check failed:", file=sys.stderr)
-        for error in errors:
-            print(f"- {error}", file=sys.stderr)
+        # Never log values or paths derived from secret-bearing input.
+        print(f"{len(errors)} invariant violation(s); inspect required files and local source privately.", file=sys.stderr)
         return 1
     print("Repository invariants: PASS")
     return 0
