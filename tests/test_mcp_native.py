@@ -125,7 +125,7 @@ class NativeMCPTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([e["entityId"] for e in self.workspace.context()["entities"]], ["another-build"])
 
     async def test_request_state_is_integrity_protected(self):
-        async with Client(create_server(self.workspace)) as client:
+        async with Client(create_server(self.workspace), elicitation_callback=self.approve) as client:
             preview = await self.call(client, "opencraft_preview_build", {"plan": self.plan()})
             args = {"preview_hash": preview["previewHash"], "request_id": "tamper"}
             first = await client.session.call_tool("opencraft_request_commit", args, allow_input_required=True)

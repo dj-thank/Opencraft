@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 import sqlite3
 from typing import Iterator
@@ -147,7 +147,7 @@ class Database:
         return connection
 
     def _initialize(self) -> None:
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(_SCHEMA)
             connection.execute(
@@ -162,16 +162,14 @@ class Database:
             connection.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
             yield connection
             connection.execute("COMMIT")
-        except Exception:
-            try:
+        except BaseException:
+            if connection.in_transaction:
                 connection.execute("ROLLBACK")
-            finally:
-                connection.close()
             raise
-        else:
+        finally:
             connection.close()
 
     def integrity_check(self) -> str:
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             row = connection.execute("PRAGMA integrity_check").fetchone()
             return str(row[0]) if row else "unknown"

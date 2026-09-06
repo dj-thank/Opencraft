@@ -8,6 +8,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 import time
+import tempfile
 
 
 class AuthError(RuntimeError):
@@ -42,16 +43,23 @@ class TokenAuthority:
         directory = Path(directory).expanduser().resolve()
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / "token-pepper.bin"
-        if path.exists():
-            secret = path.read_bytes()
-        else:
-            secret = secrets.token_bytes(32)
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-            descriptor = os.open(path, flags, 0o600)
-            with os.fdopen(descriptor, "wb") as handle:
-                handle.write(secret)
-                handle.flush()
-                os.fsync(handle.fileno())
+        if not path.exists():
+            # Publish only a fully written pepper. Concurrent startups must never
+            # read a half-written key or replace another process's authority.
+            descriptor, temporary_name = tempfile.mkstemp(prefix=".pepper-", dir=directory)
+            temporary = Path(temporary_name)
+            try:
+                with os.fdopen(descriptor, "wb") as handle:
+                    handle.write(secrets.token_bytes(32))
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                try:
+                    os.link(temporary, path)
+                except FileExistsError:
+                    pass  # another complete authority won the race
+            finally:
+                temporary.unlink(missing_ok=True)
+        secret = path.read_bytes()
         if os.name != "nt":
             path.chmod(0o600)
         return cls(secret)
