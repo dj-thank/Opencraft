@@ -23,13 +23,23 @@ class Check:
 
 
 def run(name: str, command: list[str], *, required_program: str | None = None) -> Check:
-    if required_program and shutil.which(required_program) is None:
+    program = shutil.which(required_program) if required_program else None
+    if required_program and program is None:
         return Check(name, "blocked", 0.0, f"{required_program} is not installed", blocking=True)
+    if program:
+        # Use the discovered path so Windows can launch npm.CMD without shell=True.
+        command = [program, *command[1:]]
     start = time.monotonic()
     try:
-        result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=180)
-    except (OSError, subprocess.TimeoutExpired):
-        return Check(name, "failed", round(time.monotonic() - start, 3), "required check could not complete")
+        # Node emits UTF-8 even when Windows uses a different locale encoding.
+        # Undecodable diagnostics must not prevent reporting the check's exit status.
+        result = subprocess.run(
+            command, cwd=ROOT, text=True, encoding="utf-8", errors="replace",
+            capture_output=True, timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        detail = f"required check could not complete: {type(exc).__name__}: {exc}"
+        return Check(name, "failed", round(time.monotonic() - start, 3), detail)
     detail = (result.stdout + result.stderr).strip()[-12000:]
     return Check(name, "passed" if result.returncode == 0 else "failed", round(time.monotonic() - start, 3), detail)
 
