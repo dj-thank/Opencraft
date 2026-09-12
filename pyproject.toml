@@ -13,8 +13,8 @@ authors = [{ name = "OpenCraft contributors" }]
 dependencies = []
 
 [project.optional-dependencies]
-mcp = ["mcp==2.1.1"]
-dev = ["jsonschema>=4.23,<5", "build>=1.2,<2", "mcp==2.1.1"]
+mcp = ["mcp==2.2.0"]
+dev = ["jsonschema>=4.23,<5", "build>=1.2,<2", "mcp==2.2.0"]
 
 [project.scripts]
 opencraft-quality = "opencraft_core.cli:quality_main"
