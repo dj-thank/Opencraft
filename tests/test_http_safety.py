@@ -52,6 +52,50 @@ class HTTPSafetyTests(unittest.TestCase):
     def test_missing_session_cannot_read_world(self):
         self.assertEqual(self.request('GET', '/v1/world/context', authenticated=False)[0], 401)
 
+    def test_rejected_post_closes_connection_before_unread_body_is_reused(self):
+        for path, headers, expected in (
+            ('/v1/invites', {}, 401),
+            ('/v1/dev/worlds', {}, 403),
+            ('/v1/missing', {'Authorization': 'Bearer ' + self.token}, 404),
+        ):
+            with self.subTest(path=path):
+                connection = HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
+                try:
+                    connection.request('POST', path, body='{}', headers={
+                        'Content-Type': 'application/json', **headers,
+                    })
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, expected)
+                    response.read()
+                    self.assertTrue(response.will_close)
+                    # HTTPConnection must reconnect rather than append a request
+                    # after an unread rejected request body on the old socket.
+                    connection.request('GET', '/healthz')
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(json.loads(response.read())['status'], 'ok')
+                finally:
+                    connection.close()
+
+    def test_successful_requests_keep_connection_reusable(self):
+        connection = HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
+        try:
+            for _ in range(2):
+                connection.request('POST', '/v1/invites', body='{}', headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + self.token,
+                })
+                response = connection.getresponse()
+                self.assertEqual(response.status, 201)
+                response.read()
+                self.assertFalse(response.will_close)
+                if _ == 0:
+                    first_socket = connection.sock
+                else:
+                    self.assertIs(connection.sock, first_socket)
+        finally:
+            connection.close()
+
     def test_context_is_real_and_nonfinite_json_is_rejected(self):
         self.assertEqual(self.request('GET', '/v1/world/context')[0], 200)
         self.assertEqual(self.request('POST', '/v1/invites', {'maxUses': float('nan')})[0], 400)
