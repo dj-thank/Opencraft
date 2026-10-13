@@ -62,10 +62,15 @@ class OpenCraftHandler(BaseHTTPRequestHandler):
         for name, value in self._security_headers(content_type=content_type).items():
             self.send_header(name, value)
         self.send_header("Content-Length", str(len(payload)))
+        if self.close_connection:
+            self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(payload)
 
     def _problem(self, status: int, code: str, message: str) -> None:
+        # Authentication and routing can reject a request before its body is
+        # consumed. Never parse those unread bytes as the next HTTP request.
+        self.close_connection = True
         self._send(status, {
             "type": f"urn:opencraft:problem:{code}",
             "title": message,
